@@ -10,7 +10,7 @@ import plotly.express as px
 import doctest
 
 
-dataset = 2 # 1 or Example 3-8, 2 or Weir Tables 5.2 / 5.3
+dataset = 2 # 1 for Example 3-8, 2 or Weir Tables 5.2 / 5.3
 
 # Slurry Systems Handbook Example 3-8
 # Figure 3-10 is showing Tau - Tau 0 but labelled the axis Tau??
