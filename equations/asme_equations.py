@@ -1,41 +1,77 @@
 import numpy as np
-
+import pint
+ureg = pint.UnitRegistry()
 # ASME BPVC-VIII_D1
 
 
-def ug_131_e_2(do, P, P_d, k_discharge=0.64, C=2407, A=None, M=None, T=None, 
-                w= 62.4, W_T=None, Z=None):
+def ug_131_e_2(P, P_d, W_A=None, do=None, k_D=0.64, C=2407, 
+                solve_for="W_A", A=None, M=None, T=None, w= 1000, 
+                W_T=None, Z=None):
     """
     UG-127 Nonreclosing Pressure Relief Devices (a) Rupture Disk Devices. 
     Subsection UG-127(a)(2)(-a)(-1)(+c) referring to UG-131(e)(2).
 
     Args:
-        do (float: [in] diameter, [in]
-        P (float): [psi] Set pressure plus atmospheric
-        P_d (float): [psi] pressure at discharge from device
+        do (float: [mm] diameter
+        P (float): [kPa] Set pressure plus atmospheric
+        P_d (float): [kPa] pressure at discharge from device
         k_discharge (float, optional): 0.64 per UG-127(a)(2)(-a)(-1)(+c).
-        C (integer): constant for gas or vapor. 
-        A (float, optional): [in2] actual discharge area through the device. Defaults to None.
+        C (integer): constant for gas or vapour. 
+        A (float, optional): [mm2] actual discharge area through the device. Defaults to None.
         M (float, optional): molecular weight. Defaults to None.
-        T (float, optional): [F] absolute temperature. Defaults to None.
-        w (float, optional): [lbf/ft3] specifc weight of water. Defaults to 62.4.
-        W_T (float, optional): [lb/hr] theoretical flow. Defaults to None.
+        T (float, optional): [C] absolute temperature. Defaults to None.
+        w (float, optional): [kg/m3] specific weight of water. Defaults to 1000 (62.4 lbf/ft3).
+        W_T (float, optional): [kg/hr] theoretical flow. Defaults to None.
         Z (float, optional): compressibility factor. Defaults to None.
 
     Returns:
-        float: [kg/h] theroetical flow.
+        do float: [mm] Diameter based on Actual flow.
+        W_A float: [kg/h] actual flow.
     """
 
-    A = np.pi / 4 * do**2
+    # convert to US Customary units for equation
 
-    W_T = C * A * np.sqrt( (P - P_d) * w) # lb/hr
-    W_T_si = W_T / 2.2046 # kg/h
+    P = P * ureg.kilopascal
+    P_ = P.to('psi')
 
-    if k_discharge:
-        W_T_si = W_T_si * k_discharge
+    P_d = P_d * ureg.kilopascal
+    P_d_ = P_d.to('psi')
 
+    w = w * ureg("kilogram / meter ** 3")
+    w_ = w.to("pounds / foot ** 3")
 
-    return W_T_si
+    # solve for actual flow
+    if solve_for == "W_A":
+        do = do * ureg.millimeters
+        do_ = do.to('inch')
 
-W_T_si = ug_131_e_2(4, 275, 14.7, C=2407, k_discharge=0.6)
-print(f"Pressure relief system shall not exceed: {W_T_si /1000:.1f} t/h of water")
+        A = np.pi / 4 * do**2
+        A_ = A.to('inch ** 2')
+    
+
+        W_T_ = C * A_ * np.sqrt( (P_ - P_d_) * w_) # lb/hr
+        W_T_ = W_T_.magnitude * ureg("lb / hour")
+
+        W_T = W_T_.to("kg / hour") 
+        W_A = W_T * k_D 
+
+        return do, W_A
+
+    # solve for diameter for actual flow provided.
+    if solve_for == "do_a":
+        W_T = W_A / k_D * ureg("kg / hour")
+        W_A = W_T * k_D
+        W_T_ = W_T.to("lbs / hour")
+
+        A_ = W_T_ / ( C * np.sqrt( (P_ - P_d_) * w_) ) # lb/hr
+        A_ = A_.magnitude * ureg("inch **2")
+        do_ = np.sqrt( A_ * 4 / np.pi )
+        do = do_.to('mm')
+
+        return do, W_A
+
+do, W_A = ug_131_e_2(1780, 101, do=None, W_A=800e3, solve_for="do_a")
+# do, W_A = ug_131_e_2(1780, 101, do=80, W_A=None, solve_for="W_A")
+
+print(f"Actual flow: {W_A}")
+print(f"Diameter for actual flow: {do}")
