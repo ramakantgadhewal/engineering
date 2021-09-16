@@ -79,7 +79,7 @@ print(f"Actual flow: {W_A}")
 print(f"Diameter for actual flow: {do}")
 
 
-def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, k_D=0.64, C=5.092, W_A = None, do=None,
+def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, K=0.62, C=5.092, W_A = None, do=None,
                             A=None, W_T=None, solve_for="W_A"):
     """
     ASME Section XIII 2021 Rules for Overpressure Protection.  9.7.6 Device
@@ -92,7 +92,7 @@ def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, k_D=0.64, C=5.092, W_A = None, do=None,
         P (float): [MPaa] absolute relieving pressure 
         P_d (float): [MPaa] absolute discharge pressure
         rho_l (float): [kg/m3] density of fluid at device inlet condition 
-        k_D (float, optional): Defaults to 0.64.
+        K (float, optional): coefficient of discharge per 4.1.3.2(a)(4) Defaults to 0.62.
         C (float, optional): constant for water SI units. Defaults to 5.092.
         W_A (float, optional): Defaults to None.
         do (float, optional): actual diameter of discharge. Defaults to None.
@@ -115,14 +115,14 @@ def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, k_D=0.64, C=5.092, W_A = None, do=None,
         W_T = C * A * np.sqrt( (P - P_d) * rho_l) 
         W_T = W_T.magnitude * ureg("kg / hour")
 
-        W_A = W_T * k_D 
+        W_A = W_T * K 
 
         return do, W_A
 
     # solve for diameter for actual flow provided.
     if solve_for == "do_a":
-        W_T = W_A / k_D * ureg("kg / hour")
-        W_A = W_T * k_D
+        W_T = W_A / K * ureg("kg / hour")
+        W_A = W_T * K
 
         A = W_T / ( C * np.sqrt( (P - P_d) * rho_l) ) 
         A = A.magnitude * ureg("mm **2")
