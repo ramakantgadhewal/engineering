@@ -2,6 +2,8 @@ import numpy as np
 import pint
 ureg = pint.UnitRegistry()
 
+from scipy import interpolate
+
 import fluids
 
 from fluids.units import  nearest_pipe, u
@@ -218,7 +220,7 @@ def asme_b31_4_402_6_1( S_E, S_H, Fa=0, M=0, Z=1, A=1, v=0.3):
     
     return S_L
 
-def asme_b31_4_403_2_1(P_i, D, F, E, A, S=None, S_y=None, t_n= None):
+def asme_b31_4_403_2_1(P_i, D, F=0.72, E=1, A=0, S=None, S_y=None, t_n= None):
     """
     403.2 Criteria for Pipe Wall Thickness and Allowances. Returns
     403.2.1 Criteria. The nominal wall thickness of straight sections of steel 
@@ -282,7 +284,6 @@ def asme_b31_4_402_7(S_L, S_H, S_t= None):
 
     if S_t:
         S_eq = 2. * ( (S_L - S_H)**2 + S_t**2)**0.5
-        print('hhh')
     else:
         S_eq = abs(S_L - S_H)
         print(S_eq)
@@ -291,6 +292,110 @@ def asme_b31_4_402_7(S_L, S_H, S_t= None):
     S_eq_det = (((S_H)**2 - S_H*S_L + S_L**2))**0.5
 
     return S_eq
+
+
+###############################################################################
+#
+#         ASME BPVC I Power Boilers
+#
+###############################################################################
+
+def interpolate_1d_from_strings(x,y,x_value):
+    #TODO add to my functions
+
+    # Split out the one string variables into a numpy array of float type values
+    # https://stackoverflow.com/questions/1614236
+    
+    x = np.array(x.split()).astype(float)
+    y = np.array(y.split()).astype(float)
+    
+    if len(x) != len(y):
+        print('WARNING: The number of values (length) of the input ranges \
+            to not match. Go back and fix!')
+    else:
+        f = interpolate.interp1d(x, y, bounds_error=False)
+
+        return float(f(x_value))
+
+
+def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, W=None, W_r=None):
+    """_summary_
+
+    Args:
+        e (_type_): eccentricity of W (see Figure PG-56.1.2), in. (mm)
+        l (_type_): length of attachment of tube, in. (mm)
+        W (_type_): eccentric load applied to lug, lb (N)
+        W_r (_type_): load component normal to tube axis, lb (N)
+        D (float): Outside diameter of the pipe, in. (mm)
+        t (float): Attachment thickness, in. (mm)
+        S_a (float): allowable stress value from Section II, Part D, Subpart 1, 
+                        Table 1A, psi (MPa)
+        S = pressure stress in tube determined by the equation in PG-27.2.1, 
+                psi (MPa)
+
+
+    """
+
+
+    # Step 1 Determine K from Table PG-56.2.
+
+    # Table PG-56.2 Tube Attachment Angle Design Factor, K
+    angle_of_attachment = '0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 \
+                            80 85 90'
+    K_values = '1.000 1.049 1.108 1.162 1.224 1.290 1.364 1.451 1.545 1.615 1.730\
+         1.836 1.949 2.076 2.221 2.341 2.513 2.653 2.876'
+
+    angle_deg = np.arcsin(t_lug/(D/2)) * 180 / np.pi
+    
+    K =  interpolate_1d_from_strings(angle_of_attachment, K_values, angle_deg )
+
+    X = b * D / t**2
+
+    # Step 2. Determine load factor, Lf,
+
+    # (a) Compression Loading
+    L_f_c = 1.618 * X **(-1.020-0.014 * np.log10(X) + 0.005 * (np.log10(X))**2)
+
+    # (b) Tension Loading
+
+    L_f_t = 49.937 * X**( -2.978 + 0.898 * np.log10(X) - 0.139 * (np.log10(X)**2))
+
+    # Step 3. Determine available stress, St.
+
+    S_t = 2.0 * S_a - S
+
+
+    # Step 4. Using values obtained in Steps 1 through 3, determine maximum 
+    # allowable # unit load, La.
+    
+    L_a_c = K * b * L_f_c * S_t
+    L_a_t = K * b * L_f_t * S_t
+
+    # PG-56.1.2 Calculate the actual unit load lb/in. (N/mm)
+    
+    L_t = W_r / l + 6 * W * e / l**2
+    L_c = W_r / l - 6 * W * e / l**2
+
+    # PG-56.1.1 Check if actual unit load is less than allowable
+
+    if L_t < L_a_t:
+        print(f'Actual unit load less than allowable in tension: {L_t/L_a_t:.2f}')
+    else:
+        print(f'Warning: Actual unit load greater than allowable in tension:\
+                     {L_t/L_a_t:.2f}')
+    if abs(L_c) < abs(L_a_c):
+        print(f'Actual unit load less than allowable in compression: {abs(L_c/L_a_c):.2f}')
+    else:
+        print(f'Warning: Actual unit load greater than allowable in compression:\
+                     {abs(L_c/L_a_c):.2f}')
+
+    # Calculate the bending stresses due to the lug load
+
+    S_b_c = L_c / (K * b * L_f_c)
+    S_b_t = L_t / (K * b * L_f_t)
+
+    return K, X, L_f_c, L_f_t, S_t, L_a_c, L_a_t, L_t, L_c, S_b_c, S_b_t
+
 
 def peng_peng_eq_10_15(D, t, E, alpha, T_1, T_2, v, S_H):
     """Refer to Peng and Peng
@@ -315,6 +420,71 @@ def peng_peng_eq_10_15(D, t, E, alpha, T_1, T_2, v, S_H):
 #                            FUNCTION CALLS                                   #
 #                                                                             #
 ###############################################################################
+
+
+
+P = 13.79    
+D=4*25.4
+t_lug=0.5*25.4
+t = 0.3*25.4
+b = 1*25.4 # 1 in or 25.4 mm
+S_a = 102.421
+S = 86.412
+W_r=-3407
+W = 5702
+e = 25.4
+l=4.5*25.4
+
+asme_b31_4_403_2_1(P,D,t_n=t,)
+
+asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_r) # 101 / 31 MPa
+
+
+
+
+
+# ----------------------------------------------------------------
+
+
+
+NPS, Di, Do, t = nearest_pipe(NPS=10, schedule='20')
+P = 6000 * u.kPa
+
+S_H_bar = asme_b31_4_402_3(D=Do.to('mm'), P_i = P.to('bar')  , t=t.to('mm'))
+S_H = S_H_bar.to('MPa')
+
+
+
+
+do, W_A = asme_viii_d1_ug_131_e_2(1780, 101, do=None, W_A=800e3, solve_for="do_a")
+do, W_A = asme_viii_d1_ug_131_e_2(1780, 101, do=80, W_A=None, solve_for="W_A")
+
+print(f"Actual flow: {W_A}")
+print(f"Diameter for actual flow: {do}")
+
+
+
+do, W_A = asme_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, W_A=800e3, solve_for="do_a")
+do, W_A = asme_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, do=80, W_A=None, solve_for="W_A")
+
+
+print(f"Actual flow: {W_A}")
+print(f"Diameter for actual flow: {do}")
+
+
+
+
+
+
+
+
+
+###############################################################################
+#                                                                             #
+#                            VALIDATION CHECKS                                #
+#                                                                             #
+###############################################################################
+
 
 #--- Peng & Peng Example 10.5 Example Calculations of Basic Pipeline Behaviors
 
@@ -414,31 +584,44 @@ F.to('lbfs')
 
 
 
-# ----------------------------------------------------------------
+
+###############################################################################
+
+### Validate Lug calculation per Peng and Peng Example page 197. 
+
+
+P=2000    
+D=4
+t_lug=0.5
+t = 0.3
+b = 1 # 1 in or 25.4 mm
+S_a = 15000
+S = 12533
+W_r=-766
+W = 1286
+e = 1
+l=4.5
+
+
+asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_r) # -14645 / 4499 psi
+
+
+P = 13.79    
+D=4*25.4
+t_lug=0.5*25.4
+t = 0.3*25.4
+b = 1*25.4 # 1 in or 25.4 mm
+S_a = 102.421
+S = 86.412
+W_r=-3407
+W = 5702
+e = 25.4
+l=4.5*25.4
+
+asme_b31_4_403_2_1(P,D,t_n=t,)
+
+asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_r) # 101 / 31 MPa
 
 
 
-NPS, Di, Do, t = nearest_pipe(NPS=10, schedule='20')
-P = 6000 * u.kPa
-
-S_H_bar = asme_b31_4_402_3(D=Do.to('mm'), P_i = P.to('bar')  , t=t.to('mm'))
-S_H = S_H_bar.to('MPa')
-
-
-
-
-do, W_A = asme_viii_d1_ug_131_e_2(1780, 101, do=None, W_A=800e3, solve_for="do_a")
-do, W_A = asme_viii_d1_ug_131_e_2(1780, 101, do=80, W_A=None, solve_for="W_A")
-
-print(f"Actual flow: {W_A}")
-print(f"Diameter for actual flow: {do}")
-
-
-
-do, W_A = asme_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, W_A=800e3, solve_for="do_a")
-do, W_A = asme_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, do=80, W_A=None, solve_for="W_A")
-
-
-print(f"Actual flow: {W_A}")
-print(f"Diameter for actual flow: {do}")
-
+###############################################################################
