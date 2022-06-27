@@ -134,6 +134,61 @@ def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, K=0.62, C=5.092, W_A = None, do=None,
         return do, W_A
 
 
+def asme_b31_3_304_1_2(P, D, E, W, Y, S= None, t=None):
+    """
+    ASME B31.3 304.1.2 Straight Pipe Under Internal Pressure. 
+    Equation 3a for t < D/6.
+
+    Args:
+        P (_type_): internal design gage pressure, MPa
+        D (_type_): outside diameter of pipe as listed in tables of stan dards 
+                    or specifications or as measured. 
+        S (_type_): stress value for material from Table A-1 or Table A-1M
+        E (_type_): quality factor from Table A-1A or Table A-1B
+        W (_type_): weld joint strength reduction factor in accordance with 
+                    para. 302.3.5(e)
+        Y (_type_): coefficient from Table 304.1.1, valid for t < D/6 and for 
+                    materials shown. The value of Y may be interpolated for 
+                    intermediate temperatures. For t ≥ D/6, 
+                    Y = (d + 2c) / (D + d + 2c)
+        d (float): inside diameter of pipe. For pressure design calculation, 
+                    the inside diameter of the pipe is the maximum value 
+                    allowable under the purchase specification.
+        c (float): sum of the mechanical allowances (thread or groove depth) 
+                    plus corrosion and erosion allowances. 
+    
+    Returns:
+        t (float): pressure design thickness, as calculated in accordance with 
+                    para. 304.1.2 for internal pressure or as determined in 
+                    accordance with para. 304.1.3 for external pressure
+                    
+
+    Examples:
+        asme_b31_3_304_1_2(2000,4,1,1,0.4,t=0.3) # 12533 psi Peng Peng pg 197
+
+
+    """
+    
+    
+    if S:
+        t = P * D / (2 * (S * E * W) + P * Y)
+        if t < D/6:
+            return t
+        else:
+            print('Thickness to diameter not satisfied')
+    
+    if t < D/6:
+        S = (P * D) / (2 * t * E) - (Y * P) / E
+        return S
+    else:
+        print('Thickness to diameter not satisfied')
+
+
+
+
+
+
+
 def asme_b31_4_402_3(D, P_i, t, S_H=None):
     """
     ASME B31.4 402.3 Stress from Internal Pressure. For both restrained and 
@@ -318,14 +373,15 @@ def interpolate_1d_from_strings(x,y,x_value):
         return float(f(x_value))
 
 
-def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, W=None, W_r=None):
+def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, 
+                        W=None, W_ang=None):
     """_summary_
 
     Args:
-        e (_type_): eccentricity of W (see Figure PG-56.1.2), in. (mm)
-        l (_type_): length of attachment of tube, in. (mm)
-        W (_type_): eccentric load applied to lug, lb (N)
-        W_r (_type_): load component normal to tube axis, lb (N)
+        e (float) eccentricity of W (see Figure PG-56.1.2), in. (mm)
+        l (float): length of attachment of tube, in. (mm)
+        W (float): eccentric load applied to lug, lb (N)
+        W_ang (float): elastic load angle applied to lug, degree
         D (float): Outside diameter of the pipe, in. (mm)
         t (float): Attachment thickness, in. (mm)
         S_a (float): allowable stress value from Section II, Part D, Subpart 1, 
@@ -333,7 +389,24 @@ def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, W=None
         S = pressure stress in tube determined by the equation in PG-27.2.1, 
                 psi (MPa)
 
-
+    Returns:
+        K (float): tube attachment width design factor from Table PG-56.2, 
+                dimensionless
+        X (float): a parameter used to determine Lf, dimensionless, where
+            b = unit width = 1.0 in. (25.4 mm)
+        W_r (float): load component normal to tube axis, lb (N)
+        L_f_c (float): a compression load factor, dimensionless
+        L_f_t (float): a tension load factor, dimensionless
+        S_t (float): portion of allowable stress available for attachment 
+            loading from Step 3, psi (MPa)
+        L_a_c (float): maximum allowable unit load in compression, lb/in (N/mm) 
+            of attachment from PG-56.2. 
+        L_a_t (float): maximum allowable unit load in tension, lb/in (N/mm) 
+            of attachment from PG-56.2. 
+        L_t (float): actual unit load calculated from PG-56.1.1, lb/in (N/mm)
+        L_c (float): actual unit load calculated from PG-56.1.1, lb/in (N/mm)
+        S_b_c
+        S_b_t
     """
 
 
@@ -342,8 +415,8 @@ def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, W=None
     # Table PG-56.2 Tube Attachment Angle Design Factor, K
     angle_of_attachment = '0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 \
                             80 85 90'
-    K_values = '1.000 1.049 1.108 1.162 1.224 1.290 1.364 1.451 1.545 1.615 1.730\
-         1.836 1.949 2.076 2.221 2.341 2.513 2.653 2.876'
+    K_values = '1.000 1.049 1.108 1.162 1.224 1.290 1.364 1.451 1.545 1.615 \
+                1.730 1.836 1.949 2.076 2.221 2.341 2.513 2.653 2.876'
 
     angle_deg = np.arcsin(t_lug/(D/2)) * 180 / np.pi
     
@@ -358,7 +431,7 @@ def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, W=None
 
     # (b) Tension Loading
 
-    L_f_t = 49.937 * X**( -2.978 + 0.898 * np.log10(X) - 0.139 * (np.log10(X)**2))
+    L_f_t = 49.937 * X**(-2.978 + 0.898 * np.log10(X) - 0.139*(np.log10(X)**2))
 
     # Step 3. Determine available stress, St.
 
@@ -366,25 +439,33 @@ def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, W=None
 
 
     # Step 4. Using values obtained in Steps 1 through 3, determine maximum 
-    # allowable # unit load, La.
+    # allowable unit load, La.
     
     L_a_c = K * b * L_f_c * S_t
     L_a_t = K * b * L_f_t * S_t
 
     # PG-56.1.2 Calculate the actual unit load lb/in. (N/mm)
     
-    L_t = W_r / l + 6 * W * e / l**2
-    L_c = W_r / l - 6 * W * e / l**2
+    W_r = W * np.sin(W_ang * np.pi / 180) # lb
+
+    We = W * np.cos(W_ang * np.pi / 180) * e # lb in
+
+    # W inward to pipe is negative for compression and positive for tension.
+    # The second part is +/- so need to get absolute value. 
+    L_t = W_r / l + abs(6 * We / l**2)
+    L_c = W_r / l - abs(6 * abs(We) / l**2)
 
     # PG-56.1.1 Check if actual unit load is less than allowable
 
     if L_t < L_a_t:
-        print(f'Actual unit load less than allowable in tension: {L_t/L_a_t:.2f}')
+        print(f'Actual unit load to allowable in tension ratio: \
+                    {L_t/L_a_t:.2f}')
     else:
         print(f'Warning: Actual unit load greater than allowable in tension:\
                      {L_t/L_a_t:.2f}')
     if abs(L_c) < abs(L_a_c):
-        print(f'Actual unit load less than allowable in compression: {abs(L_c/L_a_c):.2f}')
+        print(f'Actual unit load less to allowable in compression ratio: \
+                    {abs(L_c/L_a_c):.2f}')
     else:
         print(f'Warning: Actual unit load greater than allowable in compression:\
                      {abs(L_c/L_a_c):.2f}')
@@ -423,23 +504,33 @@ def peng_peng_eq_10_15(D, t, E, alpha, T_1, T_2, v, S_H):
 
 
 
-P = 13.79    
-D=4*25.4
-t_lug=0.5*25.4
-t = 0.3*25.4
-b = 1*25.4 # 1 in or 25.4 mm
-S_a = 102.421
-S = 86.412
-W_r=-3407
-W = 5702
-e = 25.4
-l=4.5*25.4
-
-asme_b31_4_403_2_1(P,D,t_n=t,)
-
-asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_r) # 101 / 31 MPa
 
 
+###############################################################################
+#                   Lug Calculation                                           #
+###############################################################################
+
+P = 4.800               # Pipe design pressure, MPa 
+D = 114.3               # pipe diameter, mm 
+t = 8.564               # pipe thickness, mm 
+
+# H300061 PS1-SP00 Line Stop
+t_lug = 10              # lug thickness, mm 
+e = 100 / 8              # lug height, mm. This is the eccentricity.
+l = 100            # lug length, mm
+b = 1*25.4              # 1 in or 25.4 mm
+W = 32000         # load applied to the lug, N 
+                            # (-) compression. (+) tension
+W_ang = 0              # load angle applied to the lug, degree
+
+S_a = 138               # allowable stress, MPa A106 Gr. B
+                            
+# pressure hoop stress due to design pressure, MPa 
+S = asme_b31_3_304_1_2(P = P, D = D, E= 1, W= 1, Y = 0.4, t= t)  
+
+
+K, X, L_f_c, L_f_t, S_t, L_a_c, L_a_t, L_t, L_c, S_b_c, S_b_t =\
+ asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, h, l, W, W_ang)
 
 
 
@@ -447,8 +538,8 @@ asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_r) # 101 / 31 MPa
 
 
 
-NPS, Di, Do, t = nearest_pipe(NPS=10, schedule='20')
-P = 6000 * u.kPa
+NPS, Di, Do, t = nearest_pipe(NPS=4, schedule='80')
+P = 4800 * u.kPa
 
 S_H_bar = asme_b31_4_402_3(D=Do.to('mm'), P_i = P.to('bar')  , t=t.to('mm'))
 S_H = S_H_bar.to('MPa')
@@ -470,6 +561,11 @@ do, W_A = asme_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, do=80, W_A=None, solve
 
 print(f"Actual flow: {W_A}")
 print(f"Diameter for actual flow: {do}")
+
+
+
+
+
 
 
 
@@ -590,38 +686,51 @@ F.to('lbfs')
 ### Validate Lug calculation per Peng and Peng Example page 197. 
 
 
-P=2000    
-D=4
-t_lug=0.5
-t = 0.3
-b = 1 # 1 in or 25.4 mm
-S_a = 15000
-S = 12533
-W_r=-766
-W = 1286
-e = 1
-l=4.5
+P = 2000        # Pipe design pressure, psi
+D = 4           # pipe diameter, in
+t = 0.3         # pipe thickness, in
 
+t_lug = 0.5     # lug thickness, in
+e = 2           # lug height, in
+l = 4.5         # lug length, in
+b = 1           # 1 in or 25.4 mm
+W = -1000        # load applied to the lug, lb. (-) compression. (+) tension
+W_ang = 50      # load angle applied to the lug, degree
 
-asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_r) # -14645 / 4499 psi
+S_a = 15000     # allowable stress, psi
+S = 12533       # pressure hoop stress due to design pressure, psi
 
+S = asme_b31_3_304_1_2(P=P,D = D, E= 1, W= 1, Y = 0.4, t= t)
 
-P = 13.79    
-D=4*25.4
-t_lug=0.5*25.4
-t = 0.3*25.4
-b = 1*25.4 # 1 in or 25.4 mm
-S_a = 102.421
-S = 86.412
-W_r=-3407
-W = 5702
-e = 25.4
-l=4.5*25.4
+K, X, L_f_c, L_f_t, S_t, L_a_c, L_a_t, L_t, L_c, S_b_c, S_b_t =\
+ asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_ang) # -14645 / 4499 psi
 
-asme_b31_4_403_2_1(P,D,t_n=t,)
+st_bend_comp = -14656 * ureg('psi')
+st_bend_ten = 4999. * ureg('psi')
 
-asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_r) # 101 / 31 MPa
+P = 2000*6.895E-3       # Pipe design pressure, MPa (2000 psi)
+D = 4 *25.4             # pipe diameter, mm (4 in)
+t = 0.3 *25.4           # pipe thickness, mm (0.3 in)
 
+t_lug = 0.5*24.4        # lug thickness, mm (0.5 in)
+e = 2*25.4              # lug height, mm (2 in)
+l = 4.5*25.4            # lug length, mm, (4.5 in)
+b = 1*25.4              # 1 in or 25.4 mm
+W = -1000*4.448         # load applied to the lug, N (-1000 lb). 
+                            # (-) compression. (+) tension
+W_ang = 50              # load angle applied to the lug, degree
+
+S_a = 15000 * 6.896E-3  # allowable stress, MPa (15000 psi)
+S = 12533*6.896E-3      # pressure hoop stress due to design pressure, MPa 
+                            # (12533 psi)
+
+S = asme_b31_3_304_1_2(P=P,D = D, E= 1, W= 1, Y = 0.4, t= t)
+
+K, X, L_f_c, L_f_t, S_t, L_a_c, L_a_t, L_t, L_c, S_b_c, S_b_t =\
+ asme_bpvc_I_pg_56(D, t_lug, t, b, S_a, S, e, l, W, W_ang) # -101 / 31 MPa
+
+st_bend_comp.to('MPa')
+st_bend_ten.to('MPa')
 
 
 ###############################################################################
