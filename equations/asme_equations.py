@@ -9,14 +9,134 @@ import fluids
 from fluids.units import  nearest_pipe, u
 
 
-# ASME BPVC-VIII_D1
+
+###############################################################################
+#                                                                             #
+#                      ASME BPVC I Power Boilers                              #
+#                                                                             #
+###############################################################################
 
 
-def asme_viii_d1_ug_131_e_2(P, P_d, W_A=None, do=None, k_D=0.64, C=2407, 
+
+def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, 
+                        W=None, W_ang=None):
+    """
+    ASME BPVC I Power Boilers PG-56 Loading on Structural Attachments. 
+    2021 version page 49 (pdf page 111). 
+
+    Args:
+        e (float) eccentricity of W (see Figure PG-56.1.2), in. (mm)
+        l (float): length of attachment of tube, in. (mm)
+        W (float): eccentric load applied to lug, lb (N)
+        W_ang (float): elastic load angle applied to lug, degree
+        D (float): Outside diameter of the pipe, in. (mm)
+        t (float): Attachment thickness, in. (mm)
+        S_a (float): allowable stress value from Section II, Part D, Subpart 1, 
+                        Table 1A, psi (MPa)
+        S = pressure stress in tube determined by the equation in PG-27.2.1, 
+                psi (MPa)
+
+    Returns:
+        K (float): tube attachment width design factor from Table PG-56.2, 
+                dimensionless
+        X (float): a parameter used to determine Lf, dimensionless, where
+            b = unit width = 1.0 in. (25.4 mm)
+        W_r (float): load component normal to tube axis, lb (N)
+        L_f_c (float): a compression load factor, dimensionless
+        L_f_t (float): a tension load factor, dimensionless
+        S_t (float): portion of allowable stress available for attachment 
+            loading from Step 3, psi (MPa)
+        L_a_c (float): maximum allowable unit load in compression, lb/in (N/mm) 
+            of attachment from PG-56.2. 
+        L_a_t (float): maximum allowable unit load in tension, lb/in (N/mm) 
+            of attachment from PG-56.2. 
+        L_t (float): actual unit load calculated from PG-56.1.1, lb/in (N/mm)
+        L_c (float): actual unit load calculated from PG-56.1.1, lb/in (N/mm)
+        S_b_c
+        S_b_t
+    """
+
+
+    # Step 1 Determine K from Table PG-56.2.
+
+    # Table PG-56.2 Tube Attachment Angle Design Factor, K
+    angle_of_attachment = '0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 \
+                            80 85 90'
+    K_values = '1.000 1.049 1.108 1.162 1.224 1.290 1.364 1.451 1.545 1.615 \
+                1.730 1.836 1.949 2.076 2.221 2.341 2.513 2.653 2.876'
+
+    angle_deg = np.arcsin(t_lug/(D/2)) * 180 / np.pi
+    
+    K =  mf.interpolate_1d_from_strings(angle_of_attachment, K_values, angle_deg )
+
+    X = b * D / t**2
+
+    # Step 2. Determine load factor, Lf,
+
+    # (a) Compression Loading
+    L_f_c = 1.618 * X **(-1.020-0.014 * np.log10(X) + 0.005 * (np.log10(X))**2)
+
+    # (b) Tension Loading
+
+    L_f_t = 49.937 * X**(-2.978 + 0.898 * np.log10(X) - 0.139*(np.log10(X)**2))
+
+    # Step 3. Determine available stress, St.
+
+    S_t = 2.0 * S_a - S
+
+
+    # Step 4. Using values obtained in Steps 1 through 3, determine maximum 
+    # allowable unit load, La.
+    
+    L_a_c = K * b * L_f_c * S_t
+    L_a_t = K * b * L_f_t * S_t
+
+    # PG-56.1.2 Calculate the actual unit load lb/in. (N/mm)
+    
+    W_r = W * np.sin(W_ang * np.pi / 180) # lb
+
+    We = W * np.cos(W_ang * np.pi / 180) * e # lb in
+
+    # W inward to pipe is negative for compression and positive for tension.
+    # The second part is +/- so need to get absolute value. 
+    L_t = W_r / l + abs(6 * We / l**2)
+    L_c = W_r / l - abs(6 * abs(We) / l**2)
+
+    # PG-56.1.1 Check if actual unit load is less than allowable
+
+    if L_t < L_a_t:
+        print(f'Actual unit load to allowable in tension ratio: \
+                    {L_t/L_a_t:.2f}')
+    else:
+        print(f'Warning: Actual unit load greater than allowable in tension:\
+                     {L_t/L_a_t:.2f}')
+    if abs(L_c) < abs(L_a_c):
+        print(f'Actual unit load less to allowable in compression ratio: \
+                    {abs(L_c/L_a_c):.2f}')
+    else:
+        print(f'Warning: Actual unit load greater than allowable in compression:\
+                     {abs(L_c/L_a_c):.2f}')
+
+    # Calculate the bending stresses due to the lug load
+
+    S_b_c = L_c / (K * b * L_f_c)
+    S_b_t = L_t / (K * b * L_f_t)
+
+    return K, X, L_f_c, L_f_t, S_t, L_a_c, L_a_t, L_t, L_c, S_b_c, S_b_t
+
+
+###############################################################################
+#                                                                             #
+#      ASME BPVC VIII D1 Rules for Construction of Pressure Vessels           #
+#                                                                             #
+###############################################################################
+
+
+def asme_bpvc_viii_d1_ug_131_e_2(P, P_d, W_A=None, do=None, k_D=0.64, C=2407, 
                 solve_for="W_A", A=None, M=None, T=None, w= 1000, 
                 W_T=None, Z=None):
     """
-    NOTE: This equations has moved from ASME VIII to ASME VIII 2021.
+    NOTE: This equations has moved from ASME VIII to ASME XIII 2021.
     UG-127 Nonreclosing Pressure Relief Devices (a) Rupture Disk Devices. 
     Subsection UG-127(a)(2)(-a)(-1)(+c) referring to UG-131(e)(2).
     Refer to Mandatory Appendix 11 Capacity Conversions for Safety Valves
@@ -27,10 +147,12 @@ def asme_viii_d1_ug_131_e_2(P, P_d, W_A=None, do=None, k_D=0.64, C=2407,
         P_d (float): [kPa] pressure at discharge from device
         k_discharge (float, optional): 0.64 per UG-127(a)(2)(-a)(-1)(+c).
         C (integer): constant for gas or vapour. 
-        A (float, optional): [mm2] actual discharge area through the device. Defaults to None.
+        A (float, optional): [mm2] actual discharge area through the device. 
+                            Defaults to None.
         M (float, optional): molecular weight. Defaults to None.
         T (float, optional): [C] absolute temperature. Defaults to None.
-        w (float, optional): [kg/m3] specific weight of water. Defaults to 1000 (62.4 lbf/ft3).
+        w (float, optional): [kg/m3] specific weight of water. 
+                            Defaults to 1000 (62.4 lbf/ft3).
         W_T (float, optional): [kg/hr] theoretical flow. Defaults to None.
         Z (float, optional): compressibility factor. Defaults to None.
 
@@ -81,9 +203,14 @@ def asme_viii_d1_ug_131_e_2(P, P_d, W_A=None, do=None, k_D=0.64, C=2407,
         return do, W_A
 
 
+###############################################################################
+#                                                                             #
+#             ASME BPVC XIII Rules for Overpressure Protection                #
+#                                                                             #
+###############################################################################
 
-def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, K=0.62, C=5.092, W_A = None, do=None,
-                            A=None, W_T=None, solve_for="W_A"):
+def asme_bpvc_xiii_9_7_6_4_d_3(P, P_d, rho_l, K=0.62, C=5.092, W_A = None, 
+                                 do=None, A=None, W_T=None, solve_for="W_A"):
     """
     ASME Section XIII 2021 Rules for Overpressure Protection.  9.7.6 Device
     Family Certification by the Coefficient of Discharge Method. 
@@ -95,15 +222,18 @@ def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, K=0.62, C=5.092, W_A = None, do=None,
         P (float): [MPaa] absolute relieving pressure 
         P_d (float): [MPaa] absolute discharge pressure
         rho_l (float): [kg/m3] density of fluid at device inlet condition 
-        K (float, optional): coefficient of discharge per 4.1.3.2(a)(4) Defaults to 0.62.
+        K (float, optional): coefficient of discharge per 4.1.3.2(a)(4) 
+                            Defaults to 0.62.
         C (float, optional): constant for water SI units. Defaults to 5.092.
         W_A (float, optional): Defaults to None.
         do (float, optional): actual diameter of discharge. Defaults to None.
         A (float, optional): [mm2] actual discharge area through the device
                             at developed lift. Defaults to None.
-        W_T (float, optional): [kg/h] theoretical relieving capacity. Defaults to None.
+        W_T (float, optional): [kg/h] theoretical relieving capacity. 
+                                Defaults to None.
         solve_for (str, optional): "W_A" solve for actual relieving capacity. 
-                                   "do_a" solve for actual relieving diameter. Defaults to "W_A".
+                                   "do_a" solve for actual relieving diameter. 
+                                    Defaults to "W_A".
 
     Returns:
         [float]: [mm] diameter, [kg/hr] actual relieving capacity
@@ -134,7 +264,13 @@ def asme_xiii_9_7_6_4_d_3(P, P_d, rho_l, K=0.62, C=5.092, W_A = None, do=None,
         return do, W_A
 
 
-def asme_b31_3_304_1_2(P, D, E, W, Y, S= None, t=None):
+###############################################################################
+#                                                                             #
+#                       ASME B31.3 Process Piping                             #
+#                                                                             #
+###############################################################################
+
+def asme_b31_3_304_1_2(P, D, E, W, Y, S= None, t=None,c=None, d=None):
     """
     ASME B31.3 304.1.2 Straight Pipe Under Internal Pressure. 
     Equation 3a for t < D/6.
@@ -175,6 +311,7 @@ def asme_b31_3_304_1_2(P, D, E, W, Y, S= None, t=None):
         if t < D/6:
             return t
         else:
+            Y = (d + 2 * c) / (D + d + 2 *c)
             print('Thickness to diameter not satisfied')
     
     if t < D/6:
@@ -186,13 +323,18 @@ def asme_b31_3_304_1_2(P, D, E, W, Y, S= None, t=None):
 
 
 
+###############################################################################
+#                                                                             #
+#     ASME B31.4 Pipeline Transportation Systems for Liquids and Slurries     #
+#                                                                             #
+###############################################################################
 
 
 
 def asme_b31_4_402_3(D, P_i, t, S_H=None):
     """
     ASME B31.4 402.3 Stress from Internal Pressure. For both restrained and 
-    unrestrained pipelines, the circumferential (hoop) sh·ess due to internal 
+    unrestrained pipelines, the circumferential (hoop) shress due to internal 
     pressure is calculated as: 
     S_H = P_i D / (2t)
 
@@ -275,6 +417,30 @@ def asme_b31_4_402_6_1( S_E, S_H, Fa=0, M=0, Z=1, A=1, v=0.3):
     
     return S_L
 
+
+def asme_b31_4_402_7(S_L, S_H, S_t= None):
+    """
+    402 Calculation of Stresses. 402.7 Combining of Stresses.
+    In restrained pipe, the Longitudinal and circumferential (hoop) stress
+    are combined in accordance with the maximum shear stress theory as follows:
+    Args:
+        S_L (float): _description_
+        S_H (_type_): _description_
+        S_t (_type_, optional): _description_. Defaults to None.
+    """
+
+    if S_t:
+        S_eq = 2. * ( (S_L - S_H)**2 + S_t**2)**0.5
+    else:
+        S_eq = abs(S_L - S_H)
+        print(S_eq)
+    
+
+    S_eq_det = (((S_H)**2 - S_H*S_L + S_L**2))**0.5
+
+    return S_eq
+
+
 def asme_b31_4_403_2_1(P_i, D, F=0.72, E=1, A=0, S=None, S_y=None, t_n= None):
     """
     403.2 Criteria for Pipe Wall Thickness and Allowances. Returns
@@ -327,174 +493,46 @@ def asme_b31_4_403_2_1(P_i, D, F=0.72, E=1, A=0, S=None, S_y=None, t_n= None):
     return t_n, S
 
 
-def asme_b31_4_402_7(S_L, S_H, S_t= None):
-    """
-    In restrained pipe, the Longitudinal and circumferential (hoop) stress
-    are combined in accordance with the maximum shear stress theory as follows:
-    Args:
-        S_L (float): _description_
-        S_H (_type_): _description_
-        S_t (_type_, optional): _description_. Defaults to None.
-    """
-
-    if S_t:
-        S_eq = 2. * ( (S_L - S_H)**2 + S_t**2)**0.5
-    else:
-        S_eq = abs(S_L - S_H)
-        print(S_eq)
-    
-
-    S_eq_det = (((S_H)**2 - S_H*S_L + S_L**2))**0.5
-
-    return S_eq
-
-
 ###############################################################################
-#
-#         ASME BPVC I Power Boilers
-#
+#                                                                             #
+#               PIPE STRESS ENGINEERING, Peng and Peng                        #
+#                                                                             #
 ###############################################################################
-
-def interpolate_1d_from_strings(x,y,x_value):
-    #TODO add to my functions
-
-    # Split out the one string variables into a numpy array of float type values
-    # https://stackoverflow.com/questions/1614236
-    
-    x = np.array(x.split()).astype(float)
-    y = np.array(y.split()).astype(float)
-    
-    if len(x) != len(y):
-        print('WARNING: The number of values (length) of the input ranges \
-            to not match. Go back and fix!')
-    else:
-        f = interpolate.interp1d(x, y, bounds_error=False)
-
-        return float(f(x_value))
-
-
-def asme_bpvc_I_pg_56(D, t_lug, t, b=1, S_a=None, S=None, e=None, l=None, 
-                        W=None, W_ang=None):
-    """_summary_
-
-    Args:
-        e (float) eccentricity of W (see Figure PG-56.1.2), in. (mm)
-        l (float): length of attachment of tube, in. (mm)
-        W (float): eccentric load applied to lug, lb (N)
-        W_ang (float): elastic load angle applied to lug, degree
-        D (float): Outside diameter of the pipe, in. (mm)
-        t (float): Attachment thickness, in. (mm)
-        S_a (float): allowable stress value from Section II, Part D, Subpart 1, 
-                        Table 1A, psi (MPa)
-        S = pressure stress in tube determined by the equation in PG-27.2.1, 
-                psi (MPa)
-
-    Returns:
-        K (float): tube attachment width design factor from Table PG-56.2, 
-                dimensionless
-        X (float): a parameter used to determine Lf, dimensionless, where
-            b = unit width = 1.0 in. (25.4 mm)
-        W_r (float): load component normal to tube axis, lb (N)
-        L_f_c (float): a compression load factor, dimensionless
-        L_f_t (float): a tension load factor, dimensionless
-        S_t (float): portion of allowable stress available for attachment 
-            loading from Step 3, psi (MPa)
-        L_a_c (float): maximum allowable unit load in compression, lb/in (N/mm) 
-            of attachment from PG-56.2. 
-        L_a_t (float): maximum allowable unit load in tension, lb/in (N/mm) 
-            of attachment from PG-56.2. 
-        L_t (float): actual unit load calculated from PG-56.1.1, lb/in (N/mm)
-        L_c (float): actual unit load calculated from PG-56.1.1, lb/in (N/mm)
-        S_b_c
-        S_b_t
-    """
-
-
-    # Step 1 Determine K from Table PG-56.2.
-
-    # Table PG-56.2 Tube Attachment Angle Design Factor, K
-    angle_of_attachment = '0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 \
-                            80 85 90'
-    K_values = '1.000 1.049 1.108 1.162 1.224 1.290 1.364 1.451 1.545 1.615 \
-                1.730 1.836 1.949 2.076 2.221 2.341 2.513 2.653 2.876'
-
-    angle_deg = np.arcsin(t_lug/(D/2)) * 180 / np.pi
-    
-    K =  interpolate_1d_from_strings(angle_of_attachment, K_values, angle_deg )
-
-    X = b * D / t**2
-
-    # Step 2. Determine load factor, Lf,
-
-    # (a) Compression Loading
-    L_f_c = 1.618 * X **(-1.020-0.014 * np.log10(X) + 0.005 * (np.log10(X))**2)
-
-    # (b) Tension Loading
-
-    L_f_t = 49.937 * X**(-2.978 + 0.898 * np.log10(X) - 0.139*(np.log10(X)**2))
-
-    # Step 3. Determine available stress, St.
-
-    S_t = 2.0 * S_a - S
-
-
-    # Step 4. Using values obtained in Steps 1 through 3, determine maximum 
-    # allowable unit load, La.
-    
-    L_a_c = K * b * L_f_c * S_t
-    L_a_t = K * b * L_f_t * S_t
-
-    # PG-56.1.2 Calculate the actual unit load lb/in. (N/mm)
-    
-    W_r = W * np.sin(W_ang * np.pi / 180) # lb
-
-    We = W * np.cos(W_ang * np.pi / 180) * e # lb in
-
-    # W inward to pipe is negative for compression and positive for tension.
-    # The second part is +/- so need to get absolute value. 
-    L_t = W_r / l + abs(6 * We / l**2)
-    L_c = W_r / l - abs(6 * abs(We) / l**2)
-
-    # PG-56.1.1 Check if actual unit load is less than allowable
-
-    if L_t < L_a_t:
-        print(f'Actual unit load to allowable in tension ratio: \
-                    {L_t/L_a_t:.2f}')
-    else:
-        print(f'Warning: Actual unit load greater than allowable in tension:\
-                     {L_t/L_a_t:.2f}')
-    if abs(L_c) < abs(L_a_c):
-        print(f'Actual unit load less to allowable in compression ratio: \
-                    {abs(L_c/L_a_c):.2f}')
-    else:
-        print(f'Warning: Actual unit load greater than allowable in compression:\
-                     {abs(L_c/L_a_c):.2f}')
-
-    # Calculate the bending stresses due to the lug load
-
-    S_b_c = L_c / (K * b * L_f_c)
-    S_b_t = L_t / (K * b * L_f_t)
-
-    return K, X, L_f_c, L_f_t, S_t, L_a_c, L_a_t, L_t, L_c, S_b_c, S_b_t
-
 
 def peng_peng_eq_10_15(D, t, E, alpha, T_1, T_2, v, S_H):
-    """Refer to Peng and Peng
+    """
+    10.2 Behavior of Long Pipeline. 10.2.2 Anchor Force. The first step in 
+    finding the potential movement of the pipeline is to determine the 
+    force required to stop the movement of the pipeline. From the total
+    expansion given in Eq. (10.14) the force and stress can be derived per 
+    Eq. (10.15). (See page 335-336, and example 10.5 pg 346). 
 
     F = AS = AEe = A{E alpha(T-2-T_1) + (0.5 - v) S_H}
 
     Args:
-        A (_type_): _description_
-        E (_type_): _description_
-        alpha (_type_): _description_
-        T_1 (_type_): _description_
-        T_2 (_type_): _description_
-        v (_type_): _description_
-        S_H (_type_): _description_
+        A (_type_): cross sectional area of the pipe material
+        E (_type_): Youngs modulus.
+        alpha (_type_): Thermal expansion coefficient. 
+        T_1 (_type_): Installation or Construction temperature.
+        T_2 (_type_): Operating temperature. 
+        v (_type_): Poisson's ratio.
+        S_H (_type_): Pressure hoop stress based on thickness of pipe used.
+    
+    Returns:
+        F (float): The anchor force. Total axial driving force. AKA the 
+                    potential pipeline expansion force.
     """
+
     A = np.pi * D * t
     F = A * (E * alpha * (T_2 - T_1) + (0.5 - v) * S_H) 
     return F
+
+
+
+
+
+def functions():
+    """Dummy functions for use in the outline in VS Code"""
 
 ###############################################################################
 #                                                                             #
@@ -516,12 +554,12 @@ t = 8.564               # pipe thickness, mm
 
 # H300061 PS1-SP00 Line Stop
 t_lug = 10              # lug thickness, mm 
-e = 100 / 8              # lug height, mm. This is the eccentricity.
-l = 100            # lug length, mm
+e = 100 / 8             # lug height, mm. This is the eccentricity.
+l = 100                 # lug length, mm
 b = 1*25.4              # 1 in or 25.4 mm
-W = 32000         # load applied to the lug, N 
-                            # (-) compression. (+) tension
-W_ang = 0              # load angle applied to the lug, degree
+W = 32000               # load applied to the lug, N 
+                           # (-) compression. (+) tension
+W_ang = 0               # load angle applied to the lug, degree
 
 S_a = 138               # allowable stress, MPa A106 Gr. B
                             
@@ -547,16 +585,16 @@ S_H = S_H_bar.to('MPa')
 
 
 
-do, W_A = asme_viii_d1_ug_131_e_2(1780, 101, do=None, W_A=800e3, solve_for="do_a")
-do, W_A = asme_viii_d1_ug_131_e_2(1780, 101, do=80, W_A=None, solve_for="W_A")
+do, W_A = asme_bpvc_viii_d1_ug_131_e_2(1780, 101, do=None, W_A=800e3, solve_for="do_a")
+do, W_A = asme_bpvc_viii_d1_ug_131_e_2(1780, 101, do=80, W_A=None, solve_for="W_A")
 
 print(f"Actual flow: {W_A}")
 print(f"Diameter for actual flow: {do}")
 
 
 
-do, W_A = asme_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, W_A=800e3, solve_for="do_a")
-do, W_A = asme_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, do=80, W_A=None, solve_for="W_A")
+do, W_A = asme_bpvc_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, W_A=800e3, solve_for="do_a")
+do, W_A = asme_bpvc_xiii_9_7_6_4_d_3(1.780, 0.101, rho_l=1000, do=80, W_A=None, solve_for="W_A")
 
 
 print(f"Actual flow: {W_A}")
