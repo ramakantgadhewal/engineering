@@ -7,7 +7,8 @@ from scipy import interpolate
 import fluids
 
 from fluids.units import  nearest_pipe, u
-
+from mpmath import sec
+from math import radians, cos
 
 
 ###############################################################################
@@ -530,6 +531,66 @@ def peng_peng_eq_10_15(D, t, E, alpha, T_1, T_2, v, S_H):
 
 
 
+def api_spec_6a_d_3(D, P, sigma, E, f, K, S):
+    """
+    Calculate the bolt loads and torque per API Specification 6A / ISO
+    10423 Specifcation for Wellhead and Christmas Tree Equipment. 2005 edition.
+    Annex D Recommended flange bolt torque. 2021 edition has moved to Annex H
+    Recommended Assembly of Closure Bolting.
+
+    Args:
+        D (_type_): is the thread major diameter (mm)
+        P (_type_): is the thread pith, equal to 1 / number of threads per unit 
+                    length (mm)
+        sigma (_type_): is the stress in the bolt (MPa)
+        E (_type_): is the pitch diameter of thread (mm)
+        f (_type_): is the friction coefficient, 0.07 and 0.13
+        K (_type_): is the nut internal chamfer, equal to 3.175 mm
+        S (_type_): is the secant of 30 degrees. 1.1547
+
+    Call: 
+    D = [12.7, 16.7, 20.84, 24.84] * ureg('mm') # Nominal diameter
+    P = [1.75, 2, 2.5, 3] * ureg('mm') # Pitch of thread
+    sigma = 120 * ureg('MPa') # Bolt stress 
+    E = [10.8, 14.7, 18.3, 22] * ureg('mm') # Pitch diameter
+    f = 0.13 # friction coefficientH = 
+    K = 3.175 * ureg('mm') # Nut internal chamfer
+
+
+    for k, v in enumerate(D):
+        api_spec_6a_d_3(D=D[k], P=P[k], sigma=sigma, E = E[k], f=f, K=K, S=S)
+
+
+    """
+
+    A_s = np.pi / 4 * ((D - 0.974 * P))**2 # stress area (mm2)
+
+    S = 1/cos(radians(30)) # sec(radians(30)) == 1/cos(radians(30))
+
+    A_s_ = A_s.magnitude
+    D_ = D.magnitude
+    P_ = P.magnitude
+    sigma_ = sigma.magnitude
+    E_ = E.magnitude
+    K_ = K.magnitude
+
+    F = sigma * A_s # Force per stud
+    F_ = F.magnitude
+
+    H_ = 1.5 * D_ + 3.175 # hex size (nut)
+
+    T = F_ * E_ * (P_ + np.pi * f * E_ * S) / (2 * (np.pi * E_ - P_ * f * S)) \
+        + (F_ * f * (H_ + D_ + K_)/4 ) # Torque
+    T = T * ureg('N mm')
+    T.to('N m')
+    print(f"{D} - Bolt load in tension: {F.to('kN'):.0f} \
+        and Torque {T.to('N m'):.0f}")
+
+
+
+
+
+
 
 def functions():
     """Dummy functions for use in the outline in VS Code"""
@@ -540,6 +601,21 @@ def functions():
 #                                                                             #
 ###############################################################################
 
+
+
+###############################################################################
+#                   API Bolt Load and Torque Calculation                      #
+###############################################################################
+
+D = [12.7, 16.7, 20.84, 24.84] * ureg('mm') # Nominal diameter
+P = [1.75, 2, 2.5, 3] * ureg('mm') # Pitch of thread
+sigma = 120 * ureg('MPa') # Bolt stress 
+E = [10.8, 14.7, 18.3, 22] * ureg('mm') # Pitch diameter
+f = 0.07 # friction coefficientH = 
+K = 3.175 * ureg('mm') # Nut internal chamfer
+
+for k, v in enumerate(D):
+    api_spec_6a_d_3(D=D[k], P=P[k], sigma=sigma, E = E[k], f=f, K=K, S=S)
 
 
 
