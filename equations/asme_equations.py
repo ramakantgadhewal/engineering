@@ -10,6 +10,7 @@ from fluids.units import  nearest_pipe, u
 from mpmath import sec
 from math import radians, cos
 
+from misc import get_ideal_number_of_bins_per_sturgis_rule
 
 ###############################################################################
 #                                                                             #
