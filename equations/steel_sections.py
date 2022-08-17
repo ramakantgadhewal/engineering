@@ -17,29 +17,53 @@ from sectionproperties.analysis.section import Section
 # https://www.engineersedge.com/standard_material/Steel_channel_properties.htm
 
 def unit_conversions_universal_metric(size: str, weight: float, area: float, 
-        d: float, bf: float, tf: float, tw: float, ixx: float, iyy: float, 
-        xb: float):
+        d: float, b_f: float, t_f: float, t_w: float, i_xx: float, i_yy: float, 
+        x_b: float, inputUnits='u'):
+    
+    u_u = 'lb/ft' # Uniform load per length
+    u_m = 'kg/m'
+    a_u = 'in**2'
+    a_m = 'mm**2'
+    l_u = 'in'
+    l_m = 'mm'
+    i_u = 'in**4'
+    i_m = 'mm**4'
 
-    size_weight = weight * ureg('lb/ft').to('kg/m')
-    size_area = area * ureg('in**2').to('mm**2')
-    size_d = d * ureg('in').to('mm')
-    size_bf = bf * ureg('in').to('mm')
-    size_tf = tf * ureg('in').to('mm')
-    size_tw = tw * ureg('in').to('mm')
-    size_ixx = ixx * ureg('in**4').to('mm**4')
-    size_iyy = iyy * ureg('in**4').to('mm**4')
-    size_xb = xb * ureg('in').to('mm')
+    if inputUnits == 'u':
+
+        size_weight = weight * ureg(u_u).to(u_m)
+        size_area = area * ureg(a_u).to(a_m)
+        size_d = d * ureg(l_u).to(l_m)
+        size_bf = b_f * ureg(l_u).to(l_m)
+        size_tf = t_f * ureg(l_u).to(l_m)
+        size_tw = t_w * ureg(l_u).to(l_m)
+        size_ixx = i_xx * ureg(i_u).to(i_m)
+        size_iyy = i_yy * ureg(i_u).to(i_m)
+        size_xb = x_b * ureg(l_u).to(l_m)
+
+    elif inputUnits == 'm':
+
+        size_weight = weight * ureg(u_m).to(u_u)
+        size_area = area * ureg(a_m).to(a_u)
+        size_d = d * ureg(l_m).to(l_u)
+        size_bf = b_f * ureg(l_m).to(l_u)
+        size_tf = t_f * ureg(l_m).to(l_u)
+        size_tw = t_w * ureg(l_m).to(l_u)
+        size_ixx = i_xx * ureg(i_m).to(i_u)
+        size_iyy = i_yy * ureg(i_m).to(i_u)
+        size_xb = x_b * ureg(l_u).to(l_u)
+
 
     print(f"Size {size} conversions:")
-    print(f"Mass per unit length: {size_weight:.1f~P}")
-    print(f"Section area: {size_area:.1f~P}")
-    print(f"Depth of section: {size_d:.1f~P}")
-    print(f"Flange width: {size_bf:.1f~P}")
-    print(f"Flange thickness: {size_tf:.1f~P}")
-    print(f"Web thickness: {size_tw:.1f~P}")
-    print(f"Second moment of area about centroidal x-axis: {size_ixx:e~P}")
-    print(f"Second moment of area about centroidal y-axis: {size_iyy:e~P}")
-    print(f"{size_xb:.1f~P}")
+    print(f"Mass per unit length (weight): {size_weight:.1f~P}")
+    print(f"Section area (area): {size_area:.1f~P}")
+    print(f"Depth of section (d): {size_d:.1f~P}")
+    print(f"Flange width (b_f): {size_bf:.1f~P}")
+    print(f"Flange thickness (t_f): {size_tf:.1f~P}")
+    print(f"Web thickness (t_w): {size_tw:.1f~P}")
+    print(f"Second moment of area about centroidal x-axis (i_xx): {size_ixx:e~P}")
+    print(f"Second moment of area about centroidal y-axis (i_yy): {size_iyy:e~P}")
+    print(f"x_b: {size_xb:.1f~P}")
     
 
 
@@ -62,8 +86,9 @@ if __name__ == '__main__':
 
     # https://www.engineersedge.com/standard_material/Steel_channel_properties.htm
     # ('C8x13.75', 13.75, 4.04, 8, 2.343, 0.39, 0.303, 36.1, 1.53, 0.553)
-    unit_conversions_universal_metric('C8x13.75', 13.75, 4.04, 8, 2.343, 0.39, 0.303, 
-                36.1, 1.53, 0.553)
+    unit_conversions_universal_metric(size='C8x13.75', weight=13.75, area=4.04, 
+            d=8, b_f=2.343, t_f=0.39, t_w=0.303, i_xx=36.1, i_yy=1.53, 
+            x_b=0.553, inputUnits = 'u')
 
 
     #### STEEL PROPERTIES
@@ -72,4 +97,4 @@ if __name__ == '__main__':
     # (d=200, b=75, t_f=12, t_w=6, r=12, n_r=8) # PFC200
     # (d=150, b=75, t_f=9.5, t_w=6, r=10, n_r=8) # PFC150
 
-    get_steel_properties(d=8, b=2.343, t_f=0.39, t_w=0.303, r=.2, n_r=8) # C8x13.75 Ixx = 36.1, Iyy = 1.53
+    # get_steel_properties(d=8, b=2.343, t_f=0.39, t_w=0.303, r=.2, n_r=8) # C8x13.75 Ixx = 36.1, Iyy = 1.53
